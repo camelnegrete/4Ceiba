@@ -1,0 +1,500 @@
+{
+  "info": {
+    "name": "Medisalud API",
+    "description": "Colección de prueba para la API de agendamiento de citas médicas.\n\nBase URL por defecto: http://localhost:8080\n\nRecomendado ejecutar en orden (o con el Collection Runner):\n1) Médicos > Crear médico (guarda doctorId)\n2) Pacientes > Crear paciente (guarda patientId)\n3) Citas > Reservar cita (guarda appointmentId)\n4) Citas > Consultar disponibilidad / Listar citas\n5) Citas > Reprogramar cita / Cancelar cita\n6) Validar errores > (casos que provocan 4xx a propósito)\n\nLas fechas de cita se calculan automáticamente (próximo día hábil 09:00/10:00 hora Colombia) en el pre-request de la colección.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.collectionVariables.set('rand', String(Date.now()));",
+          "const d = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);",
+          "while (d.getUTCDay() === 0 || d.getUTCDay() === 6) { d.setUTCDate(d.getUTCDate() + 1); }",
+          "const y = d.getUTCFullYear();",
+          "const m = String(d.getUTCMonth() + 1).padStart(2, '0');",
+          "const day = String(d.getUTCDate()).padStart(2, '0');",
+          "pm.collectionVariables.set('slotDate', `${y}-${m}-${day}`);",
+          "pm.collectionVariables.set('appointmentDateTime', `${y}-${m}-${day}T14:00:00Z`);",
+          "pm.collectionVariables.set('rescheduleDateTime', `${y}-${m}-${day}T15:00:00Z`);",
+          "const su = new Date(Date.now() + 24 * 60 * 60 * 1000);",
+          "while (su.getUTCDay() !== 0) { su.setUTCDate(su.getUTCDate() + 1); }",
+          "pm.collectionVariables.set('sundayDateTime', `${su.getUTCFullYear()}-${String(su.getUTCMonth()+1).padStart(2,'0')}-${String(su.getUTCDate()).padStart(2,'0')}T14:00:00Z`);",
+          "pm.collectionVariables.set('outsideHoursDateTime', `${y}-${m}-${day}T23:00:00Z`);",
+          "const off = 5 * 60 * 60000;",
+          "const bnow = new Date(Date.now() - off);",
+          "const dow = bnow.getUTCDay();",
+          "const closing = dow === 6 ? 13 : 18;",
+          "let mins = bnow.getUTCHours() * 60 + bnow.getUTCMinutes() + 4;",
+          "mins = Math.ceil(mins / 30) * 30;",
+          "const by = bnow.getUTCFullYear(), bmo = String(bnow.getUTCMonth()+1).padStart(2,'0'), bda = String(bnow.getUTCDate()).padStart(2,'0');",
+          "const out = [];",
+          "for (let mm2 = mins; out.length < 3 && (mm2 + 30) <= closing * 60; mm2 += 30) {",
+          "  const h = Math.floor(mm2 / 60), mn = mm2 % 60;",
+          "  if (dow !== 0 && h >= 8) { out.push(`${by}-${bmo}-${bda}T${String(h+5).padStart(2,'0')}:${String(mn).padStart(2,'0')}:00Z`); }",
+          "}",
+          "pm.collectionVariables.set('penSlot1', out[0] || '');",
+          "pm.collectionVariables.set('penSlot2', out[1] || '');",
+          "pm.collectionVariables.set('penSlot3', out[2] || '');"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "doctorId", "value": "" },
+    { "key": "patientId", "value": "" },
+    { "key": "appointmentId", "value": "" },
+    { "key": "rand", "value": "" },
+    { "key": "slotDate", "value": "" },
+    { "key": "appointmentDateTime", "value": "" },
+    { "key": "rescheduleDateTime", "value": "" },
+    { "key": "sundayDateTime", "value": "" },
+    { "key": "outsideHoursDateTime", "value": "" },
+    { "key": "errDoctorId", "value": "" },
+    { "key": "errPatientA", "value": "" },
+    { "key": "errPatientB", "value": "" },
+    { "key": "errDocument", "value": "" },
+    { "key": "penDoctorId", "value": "" },
+    { "key": "penPatientId", "value": "" },
+    { "key": "penApptId", "value": "" },
+    { "key": "penSlot1", "value": "" },
+    { "key": "penSlot2", "value": "" },
+    { "key": "penSlot3", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Médicos",
+      "item": [
+        {
+          "name": "Crear médico",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('doctorId', pm.response.json().id);"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/doctors", "host": ["{{baseUrl}}"], "path": ["api","v1","doctors"] },
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Dr. Gregory House\",\n  \"specialty\": \"Diagnostics\",\n  \"phone\": \"3001234567\",\n  \"email\": \"doctor_{{rand}}@clinic.com\"\n}" }
+          }
+        },
+        {
+          "name": "Listar médicos",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v1/doctors", "host": ["{{baseUrl}}"], "path": ["api","v1","doctors"] } }
+        },
+        {
+          "name": "Obtener médico por id",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v1/doctors/{{doctorId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","doctors","{{doctorId}}"] } }
+        },
+        {
+          "name": "Actualizar médico",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/doctors/{{doctorId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","doctors","{{doctorId}}"] },
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Dr. Gregory House\",\n  \"specialty\": \"Nephrology\",\n  \"phone\": \"3009998888\",\n  \"email\": \"doctor_{{rand}}@clinic.com\"\n}" }
+          }
+        },
+        {
+          "name": "Eliminar médico",
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/api/v1/doctors/{{doctorId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","doctors","{{doctorId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Pacientes",
+      "item": [
+        {
+          "name": "Crear paciente",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('patientId', pm.response.json().id);"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/patients", "host": ["{{baseUrl}}"], "path": ["api","v1","patients"] },
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"John Doe\",\n  \"document\": \"{{rand}}\",\n  \"phone\": \"3001112233\",\n  \"email\": \"patient_{{rand}}@mail.com\",\n  \"birthDate\": \"1990-05-20\"\n}" }
+          }
+        },
+        {
+          "name": "Listar pacientes",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v1/patients", "host": ["{{baseUrl}}"], "path": ["api","v1","patients"] } }
+        },
+        {
+          "name": "Obtener paciente por id",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v1/patients/{{patientId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","patients","{{patientId}}"] } }
+        },
+        {
+          "name": "Actualizar paciente",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/patients/{{patientId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","patients","{{patientId}}"] },
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"John Q. Doe\",\n  \"document\": \"{{rand}}\",\n  \"phone\": \"3005556677\",\n  \"email\": \"patient_{{rand}}@mail.com\",\n  \"birthDate\": \"1990-05-20\"\n}" }
+          }
+        },
+        {
+          "name": "Eliminar paciente",
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/api/v1/patients/{{patientId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","patients","{{patientId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Citas",
+      "item": [
+        {
+          "name": "Reservar cita",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('appointmentId', body.id);",
+              "pm.test('estado PROGRAMADA', () => pm.expect(body.status).to.eql('PROGRAMADA'));"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/appointments", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments"] },
+            "body": { "mode": "raw", "raw": "{\n  \"doctorId\": \"{{doctorId}}\",\n  \"patientId\": \"{{patientId}}\",\n  \"appointmentDateTime\": \"{{appointmentDateTime}}\"\n}" }
+          }
+        },
+        {
+          "name": "Consultar disponibilidad",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/appointments/available-slots?doctorId={{doctorId}}&startDate={{slotDate}}&endDate={{slotDate}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","v1","appointments","available-slots"],
+              "query": [
+                { "key": "doctorId", "value": "{{doctorId}}" },
+                { "key": "startDate", "value": "{{slotDate}}" },
+                { "key": "endDate", "value": "{{slotDate}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar citas (filtros + paginación)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/appointments?doctorId={{doctorId}}&status=PROGRAMADA&page=0&size=20&sort=appointmentDateTime,asc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","v1","appointments"],
+              "query": [
+                { "key": "doctorId", "value": "{{doctorId}}" },
+                { "key": "patientId", "value": "{{patientId}}", "disabled": true },
+                { "key": "status", "value": "PROGRAMADA" },
+                { "key": "from", "value": "2026-01-01T00:00:00Z", "disabled": true },
+                { "key": "to", "value": "2027-01-01T00:00:00Z", "disabled": true },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" },
+                { "key": "sort", "value": "appointmentDateTime,asc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reprogramar cita",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('appointmentId', pm.response.json().id);"
+            ] } }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/appointments/{{appointmentId}}/schedule", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments","{{appointmentId}}","schedule"] },
+            "body": { "mode": "raw", "raw": "{\n  \"newAppointmentDateTime\": \"{{rescheduleDateTime}}\"\n}" }
+          }
+        },
+        {
+          "name": "Cancelar cita",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('estado CANCELADA', () => pm.expect(pm.response.json().status).to.eql('CANCELADA'));"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/v1/appointments/{{appointmentId}}/cancellation", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments","{{appointmentId}}","cancellation"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validar errores",
+      "description": "Peticiones que provocan errores a propósito para validar el manejo de excepciones y las reglas de negocio. Ejecutar en orden (o con el Collection Runner).",
+      "item": [
+        {
+          "name": "Preparar: crear médico",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('errDoctorId', pm.response.json().id);"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/doctors", "host": ["{{baseUrl}}"], "path": ["api","v1","doctors"] },
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Dr. Error\",\n  \"specialty\": \"Diagnostics\",\n  \"phone\": \"3001234567\",\n  \"email\": \"err_doctor_{{rand}}@clinic.com\"\n}" }
+          }
+        },
+        {
+          "name": "Preparar: crear paciente A",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const b = pm.response.json();",
+              "pm.collectionVariables.set('errPatientA', b.id);",
+              "pm.collectionVariables.set('errDocument', b.document);"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/patients", "host": ["{{baseUrl}}"], "path": ["api","v1","patients"] },
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Paciente A\",\n  \"document\": \"{{rand}}\",\n  \"phone\": \"3001112233\",\n  \"email\": \"err_a_{{rand}}@mail.com\",\n  \"birthDate\": \"1990-05-20\"\n}" }
+          }
+        },
+        {
+          "name": "Preparar: crear paciente B",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('errPatientB', pm.response.json().id);"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/patients", "host": ["{{baseUrl}}"], "path": ["api","v1","patients"] },
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Paciente B\",\n  \"document\": \"B{{rand}}\",\n  \"phone\": \"3004445566\",\n  \"email\": \"err_b_{{rand}}@mail.com\",\n  \"birthDate\": \"1988-03-10\"\n}" }
+          }
+        },
+        {
+          "name": "Reservar cita base (setup 201)",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/appointments", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments"] },
+            "body": { "mode": "raw", "raw": "{\n  \"doctorId\": \"{{errDoctorId}}\",\n  \"patientId\": \"{{errPatientA}}\",\n  \"appointmentDateTime\": \"{{appointmentDateTime}}\"\n}" }
+          }
+        },
+        {
+          "name": "Doble reserva mismo médico y hora -> 409",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "pm.test('error Conflict', () => pm.expect(pm.response.json().error).to.eql('Conflict'));"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/appointments", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments"] },
+            "body": { "mode": "raw", "raw": "{\n  \"doctorId\": \"{{errDoctorId}}\",\n  \"patientId\": \"{{errPatientB}}\",\n  \"appointmentDateTime\": \"{{appointmentDateTime}}\"\n}" }
+          }
+        },
+        {
+          "name": "Reservar en domingo -> 400",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/appointments", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments"] },
+            "body": { "mode": "raw", "raw": "{\n  \"doctorId\": \"{{errDoctorId}}\",\n  \"patientId\": \"{{errPatientA}}\",\n  \"appointmentDateTime\": \"{{sundayDateTime}}\"\n}" }
+          }
+        },
+        {
+          "name": "Reservar fuera de horario -> 400",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/appointments", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments"] },
+            "body": { "mode": "raw", "raw": "{\n  \"doctorId\": \"{{errDoctorId}}\",\n  \"patientId\": \"{{errPatientA}}\",\n  \"appointmentDateTime\": \"{{outsideHoursDateTime}}\"\n}" }
+          }
+        },
+        {
+          "name": "Crear paciente con documento repetido -> 409",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/v1/patients", "host": ["{{baseUrl}}"], "path": ["api","v1","patients"] },
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Documento Repetido\",\n  \"document\": \"{{errDocument}}\",\n  \"phone\": \"3007778899\",\n  \"email\": \"dup_{{rand}}@mail.com\",\n  \"birthDate\": \"1992-07-01\"\n}" }
+          }
+        },
+        {
+          "name": "Consultar UUID inexistente -> 404",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+            ] } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/v1/doctors/00000000-0000-0000-0000-000000000000", "host": ["{{baseUrl}}"], "path": ["api","v1","doctors","00000000-0000-0000-0000-000000000000"] }
+          }
+        },
+        {
+          "name": "Paciente penalizado (requiere horario laboral)",
+          "description": "Genera 3 penalizaciones reservando y cancelando 3 citas de HOY (cancelación tardía, <2h) y luego intenta reservar una cuarta, que debe devolver 409 por RN-05. IMPORTANTE: solo funciona si se ejecuta en horario laboral colombiano (Lun-Vie 08:00-16:00 o Sáb 08:00-11:00), porque necesita al menos 3 franjas de 30 min disponibles hoy para poder reservar y cancelar de forma tardía. Fuera de ese horario las franjas 'penSlotN' quedan vacías y las reservas de preparación fallarán.",
+          "item": [
+            {
+              "name": "Preparar: crear médico",
+              "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                "pm.collectionVariables.set('penDoctorId', pm.response.json().id);"
+              ] } } ],
+              "request": {
+                "method": "POST",
+                "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "url": { "raw": "{{baseUrl}}/api/v1/doctors", "host": ["{{baseUrl}}"], "path": ["api","v1","doctors"] },
+                "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Dr. Penalty\",\n  \"specialty\": \"Diagnostics\",\n  \"phone\": \"3001234567\",\n  \"email\": \"pen_doctor_{{rand}}@clinic.com\"\n}" }
+              }
+            },
+            {
+              "name": "Preparar: crear paciente",
+              "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                "pm.collectionVariables.set('penPatientId', pm.response.json().id);"
+              ] } } ],
+              "request": {
+                "method": "POST",
+                "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "url": { "raw": "{{baseUrl}}/api/v1/patients", "host": ["{{baseUrl}}"], "path": ["api","v1","patients"] },
+                "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Paciente Penalizado\",\n  \"document\": \"P{{rand}}\",\n  \"phone\": \"3001112233\",\n  \"email\": \"pen_{{rand}}@mail.com\",\n  \"birthDate\": \"1990-05-20\"\n}" }
+              }
+            },
+            {
+              "name": "Reservar #1 (hoy)",
+              "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                "pm.collectionVariables.set('penApptId', pm.response.json().id);"
+              ] } } ],
+              "request": {
+                "method": "POST",
+                "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "url": { "raw": "{{baseUrl}}/api/v1/appointments", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments"] },
+                "body": { "mode": "raw", "raw": "{\n  \"doctorId\": \"{{penDoctorId}}\",\n  \"patientId\": \"{{penPatientId}}\",\n  \"appointmentDateTime\": \"{{penSlot1}}\"\n}" }
+              }
+            },
+            {
+              "name": "Cancelar #1 (tardía)",
+              "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));"
+              ] } } ],
+              "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/api/v1/appointments/{{penApptId}}/cancellation", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments","{{penApptId}}","cancellation"] } }
+            },
+            {
+              "name": "Reservar #2 (hoy)",
+              "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                "pm.collectionVariables.set('penApptId', pm.response.json().id);"
+              ] } } ],
+              "request": {
+                "method": "POST",
+                "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "url": { "raw": "{{baseUrl}}/api/v1/appointments", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments"] },
+                "body": { "mode": "raw", "raw": "{\n  \"doctorId\": \"{{penDoctorId}}\",\n  \"patientId\": \"{{penPatientId}}\",\n  \"appointmentDateTime\": \"{{penSlot2}}\"\n}" }
+              }
+            },
+            {
+              "name": "Cancelar #2 (tardía)",
+              "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));"
+              ] } } ],
+              "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/api/v1/appointments/{{penApptId}}/cancellation", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments","{{penApptId}}","cancellation"] } }
+            },
+            {
+              "name": "Reservar #3 (hoy)",
+              "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                "pm.collectionVariables.set('penApptId', pm.response.json().id);"
+              ] } } ],
+              "request": {
+                "method": "POST",
+                "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "url": { "raw": "{{baseUrl}}/api/v1/appointments", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments"] },
+                "body": { "mode": "raw", "raw": "{\n  \"doctorId\": \"{{penDoctorId}}\",\n  \"patientId\": \"{{penPatientId}}\",\n  \"appointmentDateTime\": \"{{penSlot3}}\"\n}" }
+              }
+            },
+            {
+              "name": "Cancelar #3 (tardía)",
+              "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));"
+              ] } } ],
+              "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/api/v1/appointments/{{penApptId}}/cancellation", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments","{{penApptId}}","cancellation"] } }
+            },
+            {
+              "name": "Reservar bloqueado por penalizaciones -> 409",
+              "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+                "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                "pm.test('mensaje de penalizaciones', () => pm.expect(pm.response.json().message.toLowerCase()).to.include('penalt'));"
+              ] } } ],
+              "request": {
+                "method": "POST",
+                "header": [ { "key": "Content-Type", "value": "application/json" } ],
+                "url": { "raw": "{{baseUrl}}/api/v1/appointments", "host": ["{{baseUrl}}"], "path": ["api","v1","appointments"] },
+                "body": { "mode": "raw", "raw": "{\n  \"doctorId\": \"{{penDoctorId}}\",\n  \"patientId\": \"{{penPatientId}}\",\n  \"appointmentDateTime\": \"{{appointmentDateTime}}\"\n}" }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Documentación y Salud",
+      "item": [
+        {
+          "name": "Estado (health)",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/actuator/health", "host": ["{{baseUrl}}"], "path": ["actuator","health"] } }
+        },
+        {
+          "name": "OpenAPI (JSON)",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/v3/api-docs", "host": ["{{baseUrl}}"], "path": ["v3","api-docs"] } }
+        },
+        {
+          "name": "Swagger UI",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/swagger-ui.html", "host": ["{{baseUrl}}"], "path": ["swagger-ui.html"] } }
+        }
+      ]
+    }
+  ]
+}

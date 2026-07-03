@@ -1,0 +1,16 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+  flyway:
+    enabled: true
+    clean-disabled: false
+
+logging:
+  level:
+    root: WARN
+    com.camel.medisalud: DEBUG
+    org.testcontainers: INFO
+    org.flywaydb: INFO
